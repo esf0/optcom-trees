@@ -15,6 +15,7 @@
 
 import seaborn as sns
 import numpy as np
+import scipy as sp
 import hpcom
 
 import matplotlib.pyplot as plt
@@ -85,7 +86,7 @@ def inverse_p3(values, scale):
     return np.power(np.absolute(values), 1./3.) * np.sign(values) * scale
 
 
-def predict_and_eval(model, X_test, points_init, name='test'):
+def predict_and_eval(model, X_test, points_init, p_ave_dbm, name='test'):
 
     # p_ave_dbm_expl = 6
     p_ave_dbm_expl = p_ave_dbm
