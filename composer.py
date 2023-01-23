@@ -31,8 +31,8 @@ from sklearn.metrics import mean_squared_error, accuracy_score
 # from sklearn.externals import joblib
 from datetime import datetime
 
-def get_grid(min, max, n):
 
+def get_grid(min, max, n):
     x = np.linspace(min, max, n)
     y = np.linspace(min, max, n)
     # full coordinate arrays
@@ -40,7 +40,6 @@ def get_grid(min, max, n):
 
 
 def transform(points, scale):
-
     amplitudes = np.absolute(points)
     angles = np.angle(points)
 
@@ -49,8 +48,8 @@ def transform(points, scale):
 
     return amplitudes * np.exp(1.0j * angles)
 
-def inverse_transform(points, scale):
 
+def inverse_transform(points, scale):
     amplitudes = np.absolute(points)
     angles = np.angle(points)
 
@@ -68,15 +67,13 @@ def inverse_transform(points, scale):
 #     return point_minus_m, point_plus_m
 
 def get_m_neighbours(points, m):
-
     n = len(points)
     points = np.concatenate((points[-m:], points, points[:m]))
-    result = np.array([points[k-m:k+m+1] for k in range(m,n + m)], dtype=complex)
+    result = np.array([points[k - m:k + m + 1] for k in range(m, n + m)], dtype=complex)
     return result
 
 
 def get_shift_to_square(point, point_to_shift, r):
-
     x_center, y_center = point.real, point.imag
     x_point, y_point = point_to_shift.real, point_to_shift.imag
 
@@ -99,8 +96,8 @@ def get_shift_to_square(point, point_to_shift, r):
 
     return complex(x_shift, y_shift)
 
-def get_shift_to_circle(points, points_to_shift, r):
 
+def get_shift_to_circle(points, points_to_shift, r):
     ind = np.where(np.absolute(points_to_shift - points) > r)
     shifts = np.zeros(len(points), dtype=complex)
     points_on_circle = r * np.exp(1.0j * np.angle(points_to_shift[ind] - points[ind])) + points[ind]
@@ -108,9 +105,7 @@ def get_shift_to_circle(points, points_to_shift, r):
     return shifts
 
 
-
 def get_data_with_m_neighbor_old(df, z_km, p_ave_dbm, n_channels, run_list, m_neighbours):
-
     # Create dataframe (table) with following columns:
     # neighbor symbols from -M to M, current symbol
     # optional: z_km, p_ave_dbm, n_channels
@@ -134,7 +129,8 @@ def get_data_with_m_neighbor_old(df, z_km, p_ave_dbm, n_channels, run_list, m_ne
     # print(df_result)
 
     for run in run_list:
-        df_current = df[(df['z_km'] == z_km) & (df['p_ave_dbm'] == p_ave_dbm) & (df['n_channels'] == n_channels) & (df['run'] == run)]
+        df_current = df[(df['z_km'] == z_km) & (df['p_ave_dbm'] == p_ave_dbm) & (df['n_channels'] == n_channels) & (
+                    df['run'] == run)]
 
         points_x_orig = df_current['points_x_orig'].iloc[0][0]
         # points_x_orig = transform(points_x_orig, scale=400)
@@ -150,8 +146,7 @@ def get_data_with_m_neighbor_old(df, z_km, p_ave_dbm, n_channels, run_list, m_ne
         points_diff_circle = get_shift_to_circle(points_x_orig, points_x_shifted, 0.5 / scale_constellation)
 
         for k in tqdm(range(len(points_x_shifted))):
-        # for k in tqdm(range(100)):
-
+            # for k in tqdm(range(100)):
 
             # row = np.array([np.absolute(points_x_shifted[k]), np.angle(points_x_shifted[k]),
             #                 np.absolute(points_diff[k]), np.angle(points_diff[k])])
@@ -176,7 +171,6 @@ def get_data_with_m_neighbor_old(df, z_km, p_ave_dbm, n_channels, run_list, m_ne
 
 
 def form_columns_names(m_neighbours, type='x'):
-
     columns = []
 
     for m in range(m_neighbours, 0, -1):
@@ -195,7 +189,6 @@ def form_columns_names(m_neighbours, type='x'):
 
 
 def get_label_dict_for_constellation(constellation):
-
     dict = {}
     k = 0
     for point in constellation:
@@ -208,7 +201,6 @@ def get_label_dict_for_constellation(constellation):
 
 
 def get_labels_for_points(points, constellation):
-
     labels = np.zeros(len(points))
     dict, _ = get_label_dict_for_constellation(constellation)
     k = 0
@@ -219,8 +211,72 @@ def get_labels_for_points(points, constellation):
     return labels
 
 
-def get_data_with_m_neighbor(df, z_km, p_ave_dbm, n_channels, run_list, m_neighbours, r=0.1, sigma=1.0, n_gauss=10):
+def get_data_wo_neighbor(df, z_km, p_ave_dbm, n_channels, run_list):
+    # Create dataframe (table) with following columns:
+    # neighbor symbols from -M to M, current symbol
+    # optional: z_km, p_ave_dbm, n_channels
+    # predict absolute value and angle for correction shift (in 2 dimensional plane -> real and imag part of symbol)
 
+    # seed = datetime.now()
+    # np.random.seed(seed)
+
+    p_ave = (10 ** (p_ave_dbm / 10)) / 1000
+    mod_type = hpcom.modulation.get_modulation_type_from_order(16)
+    scale_constellation = hpcom.modulation.get_scale_coef_constellation(mod_type) / np.sqrt(p_ave / 2)
+    constellation = hpcom.modulation.get_constellation(mod_type)
+
+    columns = ['point_orig_real', 'point_orig_imag',
+               'point_received_real', 'point_received_imag',
+               'point_label',
+               'diff_real', 'diff_imag']
+
+    print(columns)
+
+    df_result = pd.DataFrame(columns=columns)
+    # print(df_result)
+
+    for run in run_list:
+        print('run number', run)
+        df_current = df[(df['z_km'] == z_km) & (df['p_ave_dbm'] == p_ave_dbm) & (df['n_channels'] == n_channels) & (
+                    df['run'] == run)]
+
+        points_x_orig = df_current['points_x_orig'].iloc[0][0]
+        points_x_scaled = hpcom.modulation.get_nearest_constellation_points_new(points_x_orig * scale_constellation,
+                                                                                constellation)
+        # points_x_labels_str = list(map(str, points_x_scaled))
+        points_x_labels = get_labels_for_points(points_x_scaled, constellation)
+
+        points_x_shifted = df_current['points_x_shifted'].iloc[0]
+        points_diff = (points_x_orig - points_x_shifted) * scale_constellation
+        points_x_shifted_scaled = points_x_shifted * scale_constellation
+
+        # points_y_orig = df_current['points_y_orig'].iloc[0][0]
+        # points_y_shifted = df_current['points_y_shifted'].iloc[0]
+        # points_y_scaled = sg.get_nearest_constellation_points_new(points_y_orig * scale_constellation, constellation)
+
+        data = np.column_stack((np.real(points_x_scaled), np.imag(points_x_scaled),
+                                np.real(points_x_shifted_scaled), np.imag(points_x_shifted_scaled),
+                                points_x_labels,
+                                np.real(points_diff), np.imag(points_diff)))
+
+        # print(np.shape(data))
+
+        df_result = pd.concat([df_result, pd.DataFrame(data, columns=columns)], ignore_index=True)
+
+        # k = 1
+        # one_row = [np.absolute(points_x_orig[k]), np.angle(points_x_orig[k]),
+        #                         np.real(points_diff[k]), np.imag(points_diff[k]),
+        #                         np.real(points_diff_sq[k]), np.imag(points_diff_sq[k]),
+        #                         np.real(points_diff_circle[k]), np.imag(points_diff_circle[k])]
+        # print(one_row, np.absolute(points_with_neighbours[k]), np.angle(points_with_neighbours[k]))
+        # print(np.array(df_result.iloc[k]))
+        # if np.isclose(np.array(df_result.iloc[0]), one_row):
+        #     print('Error')
+
+    return df_result
+
+
+def get_data_with_m_neighbor(df, z_km, p_ave_dbm, n_channels, run_list, m_neighbours, r=0.1, sigma=1.0, n_gauss=10):
     # Create dataframe (table) with following columns:
     # neighbor symbols from -M to M, current symbol
     # optional: z_km, p_ave_dbm, n_channels
@@ -254,10 +310,12 @@ def get_data_with_m_neighbor(df, z_km, p_ave_dbm, n_channels, run_list, m_neighb
 
     for run in run_list:
         print('run number', run)
-        df_current = df[(df['z_km'] == z_km) & (df['p_ave_dbm'] == p_ave_dbm) & (df['n_channels'] == n_channels) & (df['run'] == run)]
+        df_current = df[(df['z_km'] == z_km) & (df['p_ave_dbm'] == p_ave_dbm) & (df['n_channels'] == n_channels) & (
+                    df['run'] == run)]
 
         points_x_orig = df_current['points_x_orig'].iloc[0][0]
-        points_x_scaled = hpcom.modulation.get_nearest_constellation_points_new(points_x_orig * scale_constellation, constellation)
+        points_x_scaled = hpcom.modulation.get_nearest_constellation_points_new(points_x_orig * scale_constellation,
+                                                                                constellation)
         # points_x_labels_str = list(map(str, points_x_scaled))
         points_x_labels = get_labels_for_points(points_x_scaled, constellation)
 
@@ -272,14 +330,12 @@ def get_data_with_m_neighbor(df, z_km, p_ave_dbm, n_channels, run_list, m_neighb
         points_y_with_neighbours = get_m_neighbours(points_y_shifted, m_neighbours)
         # points_y_scaled = sg.get_nearest_constellation_points_new(points_y_orig * scale_constellation, constellation)
 
-
-
-
         n_points = len(points_x_orig)
         mu, sigma = 0, sigma / (3.0 * scale_constellation)
         # points_diff_gauss = points_diff + (np.random.normal(mu, sigma, n_points) + 1.0j * np.random.normal(mu, sigma, n_points))
-        points_diff_gauss = np.tile(points_diff.reshape((n_points, 1)), (1, n_gauss)) + (np.random.normal(mu, sigma, (n_points, n_gauss)) +
-                                                               1.0j * np.random.normal(mu, sigma, (n_points, n_gauss)))
+        points_diff_gauss = np.tile(points_diff.reshape((n_points, 1)), (1, n_gauss)) + (
+                    np.random.normal(mu, sigma, (n_points, n_gauss)) +
+                    1.0j * np.random.normal(mu, sigma, (n_points, n_gauss)))
 
         points_diff_sq = np.zeros(n_points, dtype=complex)
         for k in range(n_points):
@@ -313,13 +369,10 @@ def get_data_with_m_neighbor(df, z_km, p_ave_dbm, n_channels, run_list, m_neighb
         # if np.isclose(np.array(df_result.iloc[0]), one_row):
         #     print('Error')
 
-
-
     return df_result
 
 
 def get_data_gauss_parallel(df, z_km, p_ave_dbm, n_channels, run_list, m_neighbours, r=0.1, sigma=1.0, n_gauss=10):
-
     # Create dataframe (table) with following columns:
     # neighbor symbols from -M to M, current symbol
     # optional: z_km, p_ave_dbm, n_channels
@@ -353,10 +406,12 @@ def get_data_gauss_parallel(df, z_km, p_ave_dbm, n_channels, run_list, m_neighbo
 
     for run in run_list:
         print('run number', run)
-        df_current = df[(df['z_km'] == z_km) & (df['p_ave_dbm'] == p_ave_dbm) & (df['n_channels'] == n_channels) & (df['run'] == run)]
+        df_current = df[(df['z_km'] == z_km) & (df['p_ave_dbm'] == p_ave_dbm) & (df['n_channels'] == n_channels) & (
+                    df['run'] == run)]
 
         points_x_orig = df_current['points_x_orig'].iloc[0][0]
-        points_x_scaled = hpcom.modulation.get_nearest_constellation_points_new(points_x_orig * scale_constellation, constellation)
+        points_x_scaled = hpcom.modulation.get_nearest_constellation_points_new(points_x_orig * scale_constellation,
+                                                                                constellation)
         # points_x_labels_str = list(map(str, points_x_scaled))
         points_x_labels = get_labels_for_points(points_x_scaled, constellation)
 
@@ -370,7 +425,6 @@ def get_data_gauss_parallel(df, z_km, p_ave_dbm, n_channels, run_list, m_neighbo
         points_y_shifted = df_current['points_y_shifted'].iloc[0]
         points_y_with_neighbours = get_m_neighbours(points_y_shifted, m_neighbours)
         # points_y_scaled = sg.get_nearest_constellation_points_new(points_y_orig * scale_constellation, constellation)
-
 
         n_points = len(points_x_orig)
         mu, sigma = 0, sigma / (3.0 * scale_constellation)
@@ -386,7 +440,8 @@ def get_data_gauss_parallel(df, z_km, p_ave_dbm, n_channels, run_list, m_neighbo
         diff_p_imag = np.power(np.imag(points_diff) * 1.0 / scale_constellation, 3)
 
         for k in range(n_gauss):
-            points_diff_gauss = points_diff + (np.random.normal(mu, sigma, n_points) + 1.0j * np.random.normal(mu, sigma, n_points))
+            points_diff_gauss = points_diff + (
+                        np.random.normal(mu, sigma, n_points) + 1.0j * np.random.normal(mu, sigma, n_points))
 
             data = np.column_stack((np.absolute(points_x_orig), np.angle(points_x_orig),
                                     points_x_labels,
@@ -411,7 +466,5 @@ def get_data_gauss_parallel(df, z_km, p_ave_dbm, n_channels, run_list, m_neighbo
         # print(np.array(df_result.iloc[k]))
         # if np.isclose(np.array(df_result.iloc[0]), one_row):
         #     print('Error')
-
-
 
     return df_result
